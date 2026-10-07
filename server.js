@@ -421,8 +421,8 @@ const skill = Alexa.SkillBuilders.custom()
 
 const adapter = new ExpressAdapter(
   skill,
-  false,
-  false
+  true,
+  true
 );
 
 // ======================================================
