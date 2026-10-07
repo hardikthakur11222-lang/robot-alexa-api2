@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robot Controller</title>
+<style>
+body{font-family:Arial,sans-serif;background:#111827;color:#fff;min-height:100vh;display:grid;place-items:center;margin:0}
+.card{width:min(92vw,520px);background:#1f2937;padding:28px;border-radius:20px;text-align:center;box-shadow:0 15px 40px rgba(0,0,0,.35)}
+h1{margin-top:0}.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:360px;margin:auto}
+button{border:0;border-radius:14px;padding:18px 10px;font-size:16px;font-weight:bold;cursor:pointer}
+.empty{visibility:hidden}#state{margin:18px 0;font-size:20px;font-weight:bold}#status{margin-top:20px;color:#d1d5db;min-height:24px}
+</style>
+</head>
+<body>
+<main class="card">
+<h1>🤖 Robot Controller</h1>
+<div id="state">Current: STOP</div>
+<div class="controls">
+<button class="empty">.</button><button onclick="move('forward')">▲ Forward</button><button class="empty">.</button>
+<button onclick="move('left')">◀ Left</button><button onclick="move('stop')">■ Stop</button><button onclick="move('right')">Right ▶</button>
+<button class="empty">.</button><button onclick="move('backward')">▼ Backward</button><button class="empty">.</button>
+</div>
+<div id="status">Ready</div>
+</main>
+<script>
+async function move(direction){
+  const status=document.getElementById("status");
+  status.textContent="Sending "+direction+"...";
+  try{
+    const response=await fetch("/api/move",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({direction})});
+    const data=await response.json();
+    if(!response.ok) throw new Error(data.error||"Request failed");
+    document.getElementById("state").textContent="Current: "+data.direction.toUpperCase();
+    status.textContent="Command sent successfully.";
+  }catch(error){status.textContent="Error: "+error.message;}
+}
+</script>
+</body>
+</html>
