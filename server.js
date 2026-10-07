@@ -6,10 +6,6 @@ const { ExpressAdapter } = require("ask-sdk-express-adapter");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ============================================================
-// CONFIGURATION
-// ============================================================
-
 const SKILL_ID =
   "amzn1.ask.skill.1e9861ad-6dd3-4d82-bc05-91630ebc085e";
 
@@ -21,14 +17,14 @@ const VALID_DIRECTIONS = [
   "stop"
 ];
 
-// ============================================================
-// ROBOT STATE
-// ============================================================
-
 let robotState = {
   direction: "stop",
   lastCommandAt: null
 };
+
+// ======================================================
+// ROBOT CONTROL
+// ======================================================
 
 function setRobotDirection(direction) {
   const value = String(direction || "")
@@ -45,20 +41,22 @@ function setRobotDirection(direction) {
     lastCommandAt: new Date().toISOString()
   };
 
-  console.log(`[ROBOT] ${value.toUpperCase()}`);
+  console.log(
+    `[ROBOT] Direction changed to: ${value.toUpperCase()}`
+  );
 
   return true;
 }
 
-// ============================================================
+// ======================================================
 // STATIC WEBSITE
-// ============================================================
+// ======================================================
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// ============================================================
-// GLOBAL HTTP LOGGER
-// ============================================================
+// ======================================================
+// HTTP LOGGER
+// ======================================================
 
 app.use((req, res, next) => {
   console.log(
@@ -68,21 +66,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// ============================================================
-// API JSON PARSER
-//
-// IMPORTANT:
-// Do NOT put express.json() globally.
-// ExpressAdapter handles the Alexa request body.
-// ============================================================
+// ======================================================
+// JSON PARSER FOR API ROUTES
+// IMPORTANT: Do NOT globally use express.json()
+// because Alexa ExpressAdapter handles Alexa requests.
+// ======================================================
 
 app.use("/api", express.json());
 
-// ============================================================
-// HEALTH CHECK
-// ============================================================
+// ======================================================
+// HEALTH
+// ======================================================
 
 app.get("/api/health", (req, res) => {
+  console.log("[API] Health check");
+
   res.json({
     success: true,
     service: "robot-api",
@@ -91,22 +89,32 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// ============================================================
+// ======================================================
 // ROBOT STATE
-// ============================================================
+// ======================================================
 
 app.get("/api/state", (req, res) => {
+  console.log("[API] State requested");
+
   res.json({
     success: true,
     state: robotState
   });
 });
 
-// ============================================================
-// MOVE ROBOT - POST
-// ============================================================
+// ======================================================
+// POST /api/move
+// Example:
+// POST /api/move
+// {
+//   "direction": "forward"
+// }
+// ======================================================
 
 app.post("/api/move", (req, res) => {
+  console.log("[API] POST /api/move");
+  console.log("[API] Body:", req.body);
+
   const direction = req.body?.direction;
 
   if (!direction) {
@@ -132,11 +140,21 @@ app.post("/api/move", (req, res) => {
   });
 });
 
-// ============================================================
-// MOVE ROBOT - GET
-// ============================================================
+// ======================================================
+// GET /api/move/:direction
+// Example:
+// /api/move/forward
+// /api/move/backward
+// /api/move/left
+// /api/move/right
+// /api/move/stop
+// ======================================================
 
 app.get("/api/move/:direction", (req, res) => {
+  console.log(
+    `[API] GET /api/move/${req.params.direction}`
+  );
+
   if (!setRobotDirection(req.params.direction)) {
     return res.status(400).json({
       success: false,
@@ -152,20 +170,23 @@ app.get("/api/move/:direction", (req, res) => {
   });
 });
 
-// ============================================================
-// ALEXA: LAUNCH REQUEST
-// ============================================================
+// ======================================================
+// ALEXA LAUNCH
+// ======================================================
 
 const LaunchRequestHandler = {
   canHandle(handlerInput) {
     return (
-      Alexa.getRequestType(handlerInput.requestEnvelope) ===
-      "LaunchRequest"
+      Alexa.getRequestType(
+        handlerInput.requestEnvelope
+      ) === "LaunchRequest"
     );
   },
 
   handle(handlerInput) {
+    console.log("========================================");
     console.log("[ALEXA] LaunchRequest received");
+    console.log("========================================");
 
     const response = handlerInput.responseBuilder
       .speak("Robot controller is ready.")
@@ -183,23 +204,35 @@ const LaunchRequestHandler = {
   }
 };
 
-// ============================================================
-// ALEXA: MOVEMENT HANDLER
-// ============================================================
+// ======================================================
+// GENERIC MOVE HANDLER
+// ======================================================
 
-function createMoveHandler(intentName, direction, speech) {
+function createMoveHandler(
+  intentName,
+  direction,
+  speech
+) {
   return {
     canHandle(handlerInput) {
       return (
-        Alexa.getRequestType(handlerInput.requestEnvelope) ===
-          "IntentRequest" &&
-        Alexa.getIntentName(handlerInput.requestEnvelope) ===
-          intentName
+        Alexa.getRequestType(
+          handlerInput.requestEnvelope
+        ) === "IntentRequest" &&
+        Alexa.getIntentName(
+          handlerInput.requestEnvelope
+        ) === intentName
       );
     },
 
     handle(handlerInput) {
-      console.log(`[ALEXA] ${intentName}`);
+      console.log(
+        `[ALEXA] Intent received: ${intentName}`
+      );
+
+      console.log(
+        `[ALEXA] Setting direction: ${direction}`
+      );
 
       setRobotDirection(direction);
 
@@ -208,7 +241,7 @@ function createMoveHandler(intentName, direction, speech) {
         .getResponse();
 
       console.log(
-        "[ALEXA] Movement response:",
+        "[ALEXA] Intent response:",
         JSON.stringify(response)
       );
 
@@ -216,6 +249,10 @@ function createMoveHandler(intentName, direction, speech) {
     }
   };
 }
+
+// ======================================================
+// MOVE INTENTS
+// ======================================================
 
 const MoveForwardIntentHandler =
   createMoveHandler(
@@ -252,33 +289,39 @@ const StopRobotIntentHandler =
     "Robot stopped."
   );
 
-// ============================================================
-// ALEXA: HELP
-// ============================================================
+// ======================================================
+// HELP
+// ======================================================
 
 const HelpIntentHandler = {
   canHandle(handlerInput) {
     return (
-      Alexa.getRequestType(handlerInput.requestEnvelope) ===
-        "IntentRequest" &&
-      Alexa.getIntentName(handlerInput.requestEnvelope) ===
-        "AMAZON.HelpIntent"
+      Alexa.getRequestType(
+        handlerInput.requestEnvelope
+      ) === "IntentRequest" &&
+      Alexa.getIntentName(
+        handlerInput.requestEnvelope
+      ) === "AMAZON.HelpIntent"
     );
   },
 
   handle(handlerInput) {
+    console.log("[ALEXA] HelpIntent received");
+
     return handlerInput.responseBuilder
       .speak(
         "You can say move forward, move backward, move left, move right, or stop."
       )
-      .reprompt("What would you like the robot to do?")
+      .reprompt(
+        "What would you like the robot to do?"
+      )
       .getResponse();
   }
 };
 
-// ============================================================
-// ALEXA: STOP / CANCEL
-// ============================================================
+// ======================================================
+// STOP / CANCEL
+// ======================================================
 
 const CancelAndStopIntentHandler = {
   canHandle(handlerInput) {
@@ -292,13 +335,17 @@ const CancelAndStopIntentHandler = {
 
     return (
       type === "IntentRequest" &&
-      (intent === "AMAZON.CancelIntent" ||
-        intent === "AMAZON.StopIntent")
+      (
+        intent === "AMAZON.CancelIntent" ||
+        intent === "AMAZON.StopIntent"
+      )
     );
   },
 
   handle(handlerInput) {
-    console.log("[ALEXA] Stop/Cancel");
+    console.log(
+      "[ALEXA] AMAZON Stop/Cancel received"
+    );
 
     setRobotDirection("stop");
 
@@ -308,33 +355,30 @@ const CancelAndStopIntentHandler = {
   }
 };
 
-// ============================================================
-// ALEXA: SESSION ENDED
-// ============================================================
+// ======================================================
+// SESSION ENDED
+// ======================================================
 
 const SessionEndedRequestHandler = {
   canHandle(handlerInput) {
     return (
-      Alexa.getRequestType(handlerInput.requestEnvelope) ===
-      "SessionEndedRequest"
+      Alexa.getRequestType(
+        handlerInput.requestEnvelope
+      ) === "SessionEndedRequest"
     );
   },
 
   handle(handlerInput) {
     console.log("[ALEXA] Session ended");
 
-    console.log(
-      "[ALEXA] Session ended reason:",
-      handlerInput.requestEnvelope.request.reason
-    );
-
-    return handlerInput.responseBuilder.getResponse();
+    return handlerInput.responseBuilder
+      .getResponse();
   }
 };
 
-// ============================================================
-// ALEXA: ERROR HANDLER
-// ============================================================
+// ======================================================
+// ERROR HANDLER
+// ======================================================
 
 const ErrorHandler = {
   canHandle() {
@@ -344,6 +388,7 @@ const ErrorHandler = {
   handle(handlerInput, error) {
     console.error("========================================");
     console.error("[ALEXA ERROR]");
+    console.error("Name:", error?.name);
     console.error("Message:", error?.message);
     console.error("Stack:", error?.stack);
     console.error("========================================");
@@ -356,13 +401,12 @@ const ErrorHandler = {
   }
 };
 
-// ============================================================
-// BUILD ALEXA SKILL
-// ============================================================
+// ======================================================
+// CREATE ALEXA SKILL
+// ======================================================
 
 const skill = Alexa.SkillBuilders.custom()
   .withSkillId(SKILL_ID)
-
   .addRequestHandlers(
     LaunchRequestHandler,
 
@@ -376,20 +420,12 @@ const skill = Alexa.SkillBuilders.custom()
     CancelAndStopIntentHandler,
     SessionEndedRequestHandler
   )
-
   .addErrorHandlers(ErrorHandler)
-
   .create();
 
-// ============================================================
-// EXPRESS ADAPTER
-//
-// TEMPORARY DEBUG MODE
-// Signature verification = false
-// Timestamp verification = false
-//
-// We will enable these after the basic connection works.
-// ============================================================
+// ======================================================
+// ALEXA EXPRESS ADAPTER
+// ======================================================
 
 const adapter = new ExpressAdapter(
   skill,
@@ -397,9 +433,9 @@ const adapter = new ExpressAdapter(
   false
 );
 
-// ============================================================
+// ======================================================
 // ALEXA ENDPOINT
-// ============================================================
+// ======================================================
 
 app.post(
   "/alexa",
@@ -407,7 +443,21 @@ app.post(
   (req, res, next) => {
     console.log("========================================");
     console.log("[ALEXA] POST /alexa received");
-    console.log("[ALEXA] Time:", new Date().toISOString());
+    console.log(
+      "[ALEXA] Time:",
+      new Date().toISOString()
+    );
+
+    console.log(
+      "[ALEXA] Headers:",
+      JSON.stringify(req.headers, null, 2)
+    );
+
+    console.log(
+      "[ALEXA] Body:",
+      JSON.stringify(req.body, null, 2)
+    );
+
     console.log("========================================");
 
     next();
@@ -416,23 +466,28 @@ app.post(
   adapter.getRequestHandlers()
 );
 
-// ============================================================
-// 404 / FRONTEND FALLBACK
-// ============================================================
+// ======================================================
+// CATCH-ALL
+// ======================================================
 
 app.use((req, res) => {
+  console.log(
+    `[HTTP] Catch-all: ${req.method} ${req.originalUrl}`
+  );
+
   res.sendFile(
     path.join(__dirname, "public", "index.html")
   );
 });
 
-// ============================================================
-// SERVER ERROR HANDLER
-// ============================================================
+// ======================================================
+// GLOBAL ERROR HANDLER
+// ======================================================
 
 app.use((err, req, res, next) => {
   console.error("========================================");
   console.error("[SERVER ERROR]");
+  console.error("Name:", err?.name);
   console.error("Message:", err?.message);
   console.error("Stack:", err?.stack);
   console.error("========================================");
@@ -440,20 +495,25 @@ app.use((err, req, res, next) => {
   if (!res.headersSent) {
     res.status(500).json({
       success: false,
-      error: "Internal server error"
+      error: "Internal server error",
+      message: err?.message || "Unknown server error"
     });
   }
 });
 
-// ============================================================
+// ======================================================
 // START SERVER
-// ============================================================
+// ======================================================
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("========================================");
-  console.log("ROBOT ALEXA API STARTED");
+  console.log("ROBOT API SERVER STARTED");
+  console.log("========================================");
   console.log(`Port: ${PORT}`);
-  console.log(`Alexa Skill ID: ${SKILL_ID}`);
-  console.log(`Alexa endpoint: /alexa`);
+  console.log(`Health: /api/health`);
+  console.log(`State: /api/state`);
+  console.log(`Move: /api/move/:direction`);
+  console.log(`Alexa: /alexa`);
+  console.log(`Skill ID: ${SKILL_ID}`);
   console.log("========================================");
 });
